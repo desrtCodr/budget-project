@@ -18,13 +18,22 @@ var budgetController = (function() {
         this.id = id; 
         this.description = description; 
         this.value = value; 
-     }; 
+    }; 
 
      var Income = function(id, description, value){
         this.id = id; 
         this.description = description; 
         this.value = value; 
      };
+     //function to calculate either expenses or income (using type)
+     var calculateTotal = function(type) {
+        var sum = 0; 
+        data.allItems[type].forEach(function(cur) {
+            sum += cur.value; 
+        });
+        data.totals[type] = sum; 
+     }
+
      //data structure
      var data = {
          allItems: {
@@ -34,13 +43,14 @@ var budgetController = (function() {
          totals: {
              exp: 0, 
              inc: 0
-         }
+         },
+         budget: 0,
+         percentage: -1
      };
      //public methods 
      return {
          addItem: function(type, des, val) {
             var newItem, ID;
-            
             //Create ID when addItem is called by selecting last id either inc or exp array and adding one
             if (data.allItems[type].length > 0) {
                 ID = data.allItems[type][data.allItems[type].length - 1].id + 1; 
@@ -59,6 +69,25 @@ var budgetController = (function() {
             return newItem; 
          },
 
+         calculateBudget: function() {
+            //calculate sum of income
+            calculateTotal('inc'); 
+            calculateTotal('exp'); 
+            //calculate sum of expenses
+            data.budget = data.totals.inc - data.totals.exp; 
+            //calculate budget: income - expenses
+            data.percentage = Math.round(data.totals.exp / data.totals.inc * 100); 
+            //calculate item percentage of total income
+         },
+         getBudget: function() {
+            return {
+                budget: data.budget, 
+                totalInc: data.totals.inc, 
+                totalExp: data.totals.exp,
+                percentage: data.percentage
+            }
+         },
+
          testing: function() {
             console.log(data); 
          }
@@ -75,7 +104,11 @@ var UIController = (function() {
         inputValue: '.add__value',
         inputBtn: '.add__btn',
         incomeContainer: '.income__list',
-        expenseContainer: '.expenses__list'
+        expenseContainer: '.expenses__list',
+        budgetLabel: '.budget__value',
+        incomeLabel: '.budget__income--value',
+        expensesLabel: '.budget__expenses--value',
+        percentageLabel: '.budget__expenses--percentage'
     };
     //makign some methods public for other modules to use 
     return {
@@ -84,7 +117,7 @@ var UIController = (function() {
             return {
                 type: document.querySelector(DOMStrings.inputType).value, //values: either 'inc' or 'exp'
                 description: document.querySelector(DOMStrings.inputDescription).value,
-                value: document.querySelector(DOMStrings.inputValue).value
+                value: parseFloat(document.querySelector(DOMStrings.inputValue).value)
             };
         },
         //takes the obj (id, description, value) and adds html to either column webpage depending on type (inc or exp)        
@@ -104,6 +137,29 @@ var UIController = (function() {
             newHtml = newHtml.replace('%value%', obj.value); 
             //Insert new data into the correct container (either div class income__list or expense__list) 
             document.querySelector(element).insertAdjacentHTML('beforeend', newHtml); 
+        },
+        clearFields: function() {
+            var fields, fieldsArr; 
+            //grab a HTML collection of descriptions and values
+            fields = document.querySelectorAll(DOMStrings.inputDescription + ', ' + DOMStrings.inputValue); 
+            //convert the HTML collection to an array by passing fields to the 'this' variable for the array prototype slice method
+            fieldsArr = Array.prototype.slice.call(fields); 
+            //use the forEach method to clear the fields (not using the index or array at this time)
+            fieldsArr.forEach(function(current, index, array) {
+                current.value = "";    
+            });
+            //return the focus to the description field for ease of adding new features
+            fieldsArr[0].focus(); 
+        },
+        displayBudget: function(obj){
+            document.querySelector(DOMStrings.budgetLabel).textContent = obj.budget;
+            document.querySelector(DOMStrings.incomeLabel).textContent = obj.totalInc;
+            document.querySelector(DOMStrings.expensesLabel).textContent = obj.totalExp;
+            if (obj.percentage > 0) {
+                document.querySelector(DOMStrings.percentageLabel).textContent = obj.percentage;
+            } else {
+                document.querySelector(DOMStrings.percentageLabel).textContent = '--';
+            }
         },
         //allows other modules to use DOMStrings
         getDOMStrings: function() {
@@ -127,23 +183,42 @@ var controller = (function(budgetCrtl, UICtrl) {
             }
         }); 
     };
+    var updateBudget = function() {
+        //calculate budget
+        budgetCrtl.calculateBudget(); 
+        //return the budget
+        var budget = budgetCrtl.getBudget(); 
+        //display budget in the UI
+        UICtrl.displayBudget(budget);
+    }
     //invoked by the eventlisterners above and adds data to data object and displays information to webpage
     var ctrlAddItem = function() {
         var input, newItem; 
         //get field data from form (getInput is defined in the UIcontroller module)
         input = UICtrl.getInput(); 
-        //add newly acqured date using budget controller method (creates id and pushes data to array)
-        newItem = budgetCrtl.addItem(input.type, input.description, input.value);
-        //use the new item (obj) and type (inc or exp) to add data via inserting html to website 
-        UICtrl.addListItem(newItem, input.type);     
-        //calculate budget
-    
-        //display budget in the UI
+        if(input.description !== "" && !isNaN(input.value) && input.value > 0) {
+            //add newly acqured date using budget controller method (creates id and pushes data to array)
+            newItem = budgetCrtl.addItem(input.type, input.description, input.value);
+            //use the new item (obj) and type (inc or exp) to add data via inserting html to website 
+            UICtrl.addListItem(newItem, input.type);
+            //clear the fields using UIController clearFields method
+            UICtrl.clearFields(); 
+            //calculate and update budget
+            updateBudget(); 
+            //update UI fields
+        }
+
     };
 
     return {
         init: function() {
             console.log('The application has started'); 
+            UICtrl.displayBudget({
+                budget: 0, 
+                totalInc: 0, 
+                totalExp: 0,
+                percentage: -1
+            });
             setupEventListeners(); 
         }
     }
