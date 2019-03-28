@@ -18,24 +18,34 @@ var budgetController = (function() {
         this.id = id; 
         this.description = description; 
         this.value = value; 
+        this.percentage = -1; 
     }; 
-
-     var Income = function(id, description, value){
+    Expense.prototype.calcPercentage = function(totalIncome) {
+        if (totalIncome > 0) {
+            this.percentage = Math.round(this.value / totalIncome * 100);
+        } else {
+            this.percentage = -1;
+        }
+    };
+    Expense.prototype.getPercentage = function() {
+        return this.percentage; 
+    };
+    var Income = function(id, description, value){
         this.id = id; 
         this.description = description; 
         this.value = value; 
      };
      //function to calculate either expenses or income (using type)
-     var calculateTotal = function(type) {
+    var calculateTotal = function(type) {
         var sum = 0; 
         data.allItems[type].forEach(function(cur) {
             sum += cur.value; 
         });
         data.totals[type] = sum; 
-     }
+    };
 
-     //data structure
-     var data = {
+    //data structure
+    var data = {
          allItems: {
              exp: [],
              inc: []
@@ -78,20 +88,36 @@ var budgetController = (function() {
             //in order to identify 6 from [0, 2, 3, 6, 8], we use index = 3
             index = ids.indexOf(id);
             //if id is not found, it returns -1; if found do the following
-            if (index !==-1) {
+            if (index !== -1) {
                 data.allItems[type].splice(index, 1); 
             }
          },
          calculateBudget: function() {
-            //calculate sum of income
+            //calculate sum of income and expense
             calculateTotal('inc'); 
             calculateTotal('exp'); 
-            //calculate sum of expenses
-            data.budget = data.totals.inc - data.totals.exp; 
             //calculate budget: income - expenses
-            data.percentage = Math.round(data.totals.exp / data.budget * 100); 
+            data.budget = data.totals.inc - data.totals.exp; 
             //calculate item percentage of total income
+            if (data.totals.inc > 0)  {
+                data.percentage = Math.round(data.totals.exp / data.budget * 100); 
+            } else {
+                data.percentage = -1;
+            }
+            
          },
+         calculatePercentages: function() {
+
+            data.allItems.exp.forEach(function(cur) {
+                cur.calcPercentage(data.totals.inc); 
+            });  
+         },
+         getPercentages: function() {
+            var allPerc = data.allItems.exp.map(function(cur) {
+                return cur.getPercentage(); 
+            });
+            return allPerc; 
+         }, 
          getBudget: function() {
             return {
                 budget: data.budget, 
@@ -122,8 +148,16 @@ var UIController = (function() {
         incomeLabel: '.budget__income--value',
         expensesLabel: '.budget__expenses--value',
         percentageLabel: '.budget__expenses--percentage',
-        container: '.container'
+        container: '.container',
+        expensesPercLabel: '.item__percentage'
     };
+    
+    var nodeListForEach = function(list, callback) {
+        for (var i = 0; i < list.length; i++) {
+            callback(list[i], i); 
+        }
+    };  
+
     //makign some methods public for other modules to use 
     return {
         //method gets the 3 pieces of information from the input form (inc/exp, desc., value)
@@ -136,7 +170,7 @@ var UIController = (function() {
         },
         //takes the obj (id, description, value) and adds html to either column webpage depending on type (inc or exp)        
         addListItem: function(obj, type){
-            var html, newHtml,element; 
+            var html,newHtml,element; 
             //Create HTML String with some placehoder text
             if (type === 'inc') {
                 element = DOMStrings.incomeContainer; 
@@ -180,7 +214,18 @@ var UIController = (function() {
                 document.querySelector(DOMStrings.percentageLabel).textContent = '--';
             }
         },
-        //allows other modules to use DOMStrings
+        displayPercentages: function(percentages) {
+            var fields = document.querySelectorAll(DOMStrings.expensesPercLabel); 
+            console.log(fields); 
+            nodeListForEach(fields, function(current, index) {
+                if (percentages[index] > 0) {
+                    current.textContent = percentages[index] + '%'; 
+                } else {
+                    current.textContent = '---'; 
+                }
+            });
+        },
+        //allows other modules to use DOMString
         getDOMStrings: function() {
             return DOMStrings; 
         }
@@ -214,6 +259,14 @@ var controller = (function(budgetCrtl, UICtrl) {
         //display budget in the UI
         UICtrl.displayBudget(budget);
     };
+    var updatePercentages = function() {
+        //calculate percentages
+        budgetCrtl.calculatePercentages(); 
+        //read them from the budget controller
+        var percentages = budgetCrtl.getPercentages(); 
+        //update UI
+        UICtrl.displayPercentages(percentages);
+    }; 
     //invoked by the eventlisterners above and adds data to data object and displays information to webpage
     var ctrlAddItem = function() {
         var input, newItem; 
@@ -228,7 +281,7 @@ var controller = (function(budgetCrtl, UICtrl) {
             UICtrl.clearFields(); 
             //calculate and update budget
             updateBudget(); 
-            //update UI fields
+            updatePercentages(); 
         }     
     };
     var ctrlDeleteItem = function(event) {
@@ -247,6 +300,7 @@ var controller = (function(budgetCrtl, UICtrl) {
             UICtrl.deleteListItem(itemID); 
             //update and show new budget
             updateBudget(); 
+            updatePercentages(); 
         }
     };
 
