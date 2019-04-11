@@ -1,16 +1,5 @@
-//CONTROLLER MODULE
-    //add event handler for checktBtn
-
-//UI MODULE
-    //get input values
-    //add new item to UI
-    //update the UI after budget calculations
-
-//DATA MODULE
-    //add new item to data
-    //calculate budget
-
-
+//enclose everything in an IIFE!
+const budgetApp = (()=>{
 //BUDGET CONTROLLER MODULE - private with public methods
 var budgetController = (function() {
     //private function constructors for expense and income data 
@@ -361,3 +350,4 @@ var controller = (function(budgetCrtl, UICtrl) {
 })(budgetController, UIController); 
 
 controller.init(); 
+})(); 
